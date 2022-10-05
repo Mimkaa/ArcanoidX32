@@ -28,11 +28,11 @@ public:
 		FellDown = false;
 	
 	};
-	void Update()
+	void Update(float dt)
 	{
 		topleft = pos - Vec2(float(width) / 2, float(height) / 2);
 		rect.set_position(topleft);
-		pos += vel ;
+		pos += vel * dt;
 		BounceEdges();
 
 		
