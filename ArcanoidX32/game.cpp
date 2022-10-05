@@ -67,8 +67,9 @@ public:
 	}
 	virtual bool Init() 
 	{
+		last_frame = getTickCount();
 		//paddle init
-		paddle = std::make_unique<Paddle>(Vec2(SCREEN_WIDTH / 2, float(SCREEN_HEIGHT) * 0.85), 0.2f, 1.5f, "data\\49-Breakout-Tiles.png");
+		paddle = std::make_unique<Paddle>(Vec2(SCREEN_WIDTH / 2, float(SCREEN_HEIGHT) * 0.85), 0.2f, (float)PADDLE_SPEED, "data\\49-Breakout-Tiles.png");
 		paddle->AdjustSize(float(SCREEN_WIDTH) / float(ORIGINAL_SCREEN_WIDTH));
 		// background
 		bg = createSprite("data\\background.png");
@@ -114,7 +115,7 @@ public:
 				if (rand_val < PROBABILITY)
 				{
 					abilities.push_back(std::make_unique<Ability>((*it)->getPos() + Vec2(0.0f, (float)(*it)->getHeight()),
-						(float)(*it)->getWidht() / 3, rand() % 2, 0.7f));
+						(float)(*it)->getWidht() / 3, rand() % 2, (float)ABILITY_SPEED));
 				}
 				it = tiles.erase(it);
 				
@@ -127,133 +128,163 @@ public:
 	}
 
 	virtual bool Tick() {
-		drawSprite(bg, 0, 0);
 
-		// paddle
-		paddle->Update();
-		paddle->Draw();
-
-		// tiles
-		for (auto& t : tiles)
+		int now = getTickCount();
+		int FrameTime = now - last_frame;
+		last_frame = now;
+		accumulator += FrameTime;
+		while (accumulator >= FRAME_DURATION)
 		{
-			t->Update();
-			t->Draw();
-		}
-		DeleteTiles();
-		// balls
-		// spawn
-		if (NeededBalls > 0 && balls.size() < NUMBER_BALLS && BallsLaunched)
-		{
+			accumulator -= FRAME_DURATION;
 
-			int now = getTickCount();
-			if (now - LastLaunchedBall > 1000)
+			// paddle
+			paddle->Update((float)FRAME_DURATION/1000);
+
+			// tiles
+			for (auto& t : tiles)
 			{
-				LastLaunchedBall = now;
-				Vec2 ShootDir = (mousePos - paddle->getPos()).GetNormalized();
-				Ball* ball = new Ball(paddle->getPos() - Vec2(0.0f, paddle->getHeight() + 5), 1, 1.5,
-					"data\\64-Breakout-Tiles.png");
-				ball->SetVel(ShootDir * ball->GetSpeed());
-				ball->AdjustSize(float(SCREEN_WIDTH) / float(ORIGINAL_SCREEN_WIDTH));
-				balls.push_back(static_cast<std::unique_ptr<Ball>>(ball));
-				NeededBalls -= 1;
+				t->Update();
+			}
+			DeleteTiles();
+			// balls
+			// spawn
+			if (NeededBalls > 0 && balls.size() < NUMBER_BALLS && BallsLaunched)
+			{
+
+				int now = getTickCount();
+				if (now - LastLaunchedBall > 1000)
+				{
+					LastLaunchedBall = now;
+					Vec2 ShootDir = (mousePos - paddle->getPos()).GetNormalized();
+					Ball* ball = new Ball(paddle->getPos() - Vec2(0.0f, paddle->getHeight() + 5), 1, (float)BALL_SPEED,
+						"data\\64-Breakout-Tiles.png");
+					ball->SetVel(ShootDir * ball->GetSpeed());
+					ball->AdjustSize(float(SCREEN_WIDTH) / float(ORIGINAL_SCREEN_WIDTH));
+					balls.push_back(static_cast<std::unique_ptr<Ball>>(ball));
+					NeededBalls -= 1;
+				}
+
+			}
+			// update balls
+			if (!balls.empty())
+			{
+				for (auto& ball : balls)
+				{
+					ball->Update((float)FRAME_DURATION / 1000);
+					ball->BounceObjects(paddle->rect);
+					// bounce bricks
+					for (auto it = tiles.begin(); it != tiles.end(); ++it)
+					{
+						bool hit = ball->BounceObjects((*it)->rect);
+						if (!(*it)->collided && hit)
+						{
+							(*it)->collided = true;
+							(*it)->hits -= 1;
+						}
+					}
+
+			
+				}
+
+				// delete balls
+				auto it = balls.begin();
+
+				while (it != balls.end()) {
+
+					if ((*it)->GetFellDown()) {
+
+						it = balls.erase(it);
+					}
+					else ++it;
+				}
+			}
+			else if (balls.empty() && NeededBalls == 0 && BallsLaunched)
+			{
+				BallsLaunched = false;
+				livesLeft -= 1;
 			}
 
+			// reset tiles collideability
+			int now_t = getTickCount();
+			if (now_t - tile_collision_timer > 100)
+			{
+				for (auto& t : tiles)
+				{
+					t->collided = false;
+				}
+			}
+			
+
+			// lose/win conditions
+			if (livesLeft == 0 || tiles.empty())
+			{
+				Reset();
+				Init();
+			}
+
+			// abilities
+			if (!abilities.empty())
+			{
+				for (auto& a : abilities)
+				{
+					a->Update((float)FRAME_DURATION / 1000);
+					if (a->rect.collide_rect(paddle->rect))
+					{
+						if (a->type == 0)
+						{
+							livesLeft -= 1;
+						}
+						else if (a->type == 1)
+						{
+							tiles.push_back(std::make_unique<WideBlock>(Vec2(0.0f, (float)SCREEN_HEIGHT * 0.9), SCREEN_WIDTH, "data\\21-Breakout-Tiles.png",
+								"data\\21-Breakout-Tiles.png", 1, &WideTileNum));
+						}
+					}
+				
+				}
+				// delete abilities
+				auto it = abilities.begin();
+
+				while (it != abilities.end()) {
+
+					if ((*it)->rect.collide_rect(paddle->rect) || (*it)->rect.pos.y > SCREEN_HEIGHT) {
+
+						it = abilities.erase(it);
+					}
+					else ++it;
+				}
+			}
 		}
-		// update balls
+		drawSprite(bg, 0, 0);
+		// draw paddle
+		paddle->Draw();
+		//draw tiles
+		for (auto& t : tiles)
+		{
+			t->Draw();
+		}
+		// draw balls
 		if (!balls.empty())
 		{
 			for (auto& ball : balls)
 			{
-				ball->Update();
-				ball->BounceObjects(paddle->rect);
-				// bounce bricks
-				for (auto it = tiles.begin(); it != tiles.end(); ++it)
-				{
-					bool hit = ball->BounceObjects((*it)->rect);
-					if (!(*it)->collided && hit)
-					{
-						(*it)->collided = true;
-						(*it)->hits -= 1;
-					}
-				}
-
 				ball->Draw();
 			}
-
-			// delete balls
-			auto it = balls.begin();
-
-			while (it != balls.end()) {
-
-				if ((*it)->GetFellDown()) {
-
-					it = balls.erase(it);
-				}
-				else ++it;
-			}
 		}
-		else if (balls.empty() && NeededBalls == 0 && BallsLaunched)
-		{
-			BallsLaunched = false;
-			livesLeft -= 1;
-		}
-
-		// reset tiles collideability
-		int now_t = getTickCount();
-		if (now_t - tile_collision_timer > 100)
-		{
-			for (auto& t : tiles)
-			{
-				t->collided = false;
-			}
-		}
-		// dealing with lives
+		// draw lives
 		for (int i = 0; i < livesLeft; i++)
 		{
 
 			drawSprite(life, START_LIFE_DRAWING + i * (LIFE_SIZE + MARGING), MARGING);
 		}
-
-		// lose/win conditions
-		if (livesLeft == 0 || tiles.empty())
-		{
-			Reset();
-			Init();
-		}
-
-		// abilities
+		// draw abilities
 		if (!abilities.empty())
 		{
 			for (auto& a : abilities)
 			{
-				a->Update();
-				if (a->rect.collide_rect(paddle->rect))
-				{
-					if (a->type == 0)
-					{
-						livesLeft -= 1;
-					}
-					else if (a->type == 1)
-					{
-						tiles.push_back(std::make_unique<WideBlock>(Vec2(0.0f, (float)SCREEN_HEIGHT * 0.9),SCREEN_WIDTH, "data\\21-Breakout-Tiles.png",
-							"data\\21-Breakout-Tiles.png", 1, &WideTileNum));
-					}
-				}
 				a->Draw();
 			}
-			// delete abilities
-			auto it = abilities.begin();
-
-			while (it != abilities.end()) {
-
-				if ((*it)->rect.collide_rect(paddle->rect) || (*it)->rect.pos.y >SCREEN_HEIGHT) {
-
-					it = abilities.erase(it);
-				}
-				else ++it;
-			}
 		}
-		
 		return false;
 	}
 
@@ -316,6 +347,8 @@ private:
 	int livesLeft;
 	Vec2 mousePos;
 	Sprite* bg;
+	int last_frame;
+	int accumulator;
 };
 
 bool is_number(const std::string& s)

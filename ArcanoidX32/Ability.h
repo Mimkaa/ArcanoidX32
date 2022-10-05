@@ -29,9 +29,9 @@ public:
 		rect = { pos, width, height };
 	}
 
-	void Update()
+	void Update(float dt)
 	{
-		pos += vel;
+		pos += vel * dt;
 		rect.set_position(pos);
 	}
 	virtual void Draw()

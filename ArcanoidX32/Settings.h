@@ -17,9 +17,9 @@ constexpr unsigned int LIVES = 3;
 unsigned int MARGING = (START_LIFE_DRAWING / 3) / 5;
 unsigned int LIFE_SIZE = START_LIFE_DRAWING / LIVES - MARGING;
 // speeds
-float BALL_SPEED = 450;
-float PADDLE_SPEED = 500;
-float ABILITY_SPEED = 400;
+float BALL_SPEED = 400;
+float PADDLE_SPEED = 35;
+float ABILITY_SPEED = 300;
 
 constexpr unsigned int FRAME_DURATION = 16;//60 fps
-constexpr unsigned int DT_MEAN_DENOM = 30;
+

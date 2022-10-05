@@ -34,18 +34,18 @@ public:
 		height = newHeight;
 	}
 
-	void Update()
+	void Update(float dt)
 	{
 		topleft = pos - Vec2(float(width) / 2, float(height) / 2);
 		rect.set_position(topleft);
 		// moving
 		if (moving_left)
 		{
-			Move(Vec2{ -1.0f,0.0f } * sp);
+			Move(Vec2{ -1.0f,0.0f } * sp * dt);
 		}
 		if (moving_right)
 		{
-			Move(Vec2{ 1.0f,0.0f } *sp);
+			Move(Vec2{ 1.0f,0.0f } *sp * dt);
 		}
 		Constrain();
 	}
